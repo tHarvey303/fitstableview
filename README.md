@@ -1,6 +1,14 @@
 ## FITS Table Viewer for VS Code
 
+FITS Table Viewer for VS Code
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/your-username/your-repo/main/resources/logo.png" alt="FITS Table Viewer Logo" width="128"/>
+</p>
+
 A powerful and flexible VS Code extension for viewing tabular data within FITS (Flexible Image Transport System) files. Built for astronomers, astrophysicists, and anyone working with astronomical data, this extension provides an interactive GUI to inspect FITS tables without leaving your editor.
+
+This extension is a work in progress — suggestions, comments and pull requests welcome!
 
 ### Features
 
@@ -28,7 +36,7 @@ This extension acts as a graphical frontend and relies on a Python backend for d
 
 2. Required Libraries: The astropy and pandas libraries are required. You can install them using pip:
 
-    ''' pip install astropy pandas '''
+    ``` pip install astropy pandas ``` 
 
 ### Extension Settings
 
@@ -39,7 +47,7 @@ This extension contributes the following settings to the VS Code Settings UI:
 
 ### Known Issues
 
-* The viewer currently only supports tabular HDUs (BinTableHDU, TableHDU, AsciiTableHDU). Image HDUs are ignored.
+* The viewer currently only supports tabular HDUs (BinTableHDU, TableHDU). Image HDUs are ignored.
 * Column calculations and data export features are not yet implemented.
 * Multi-dimensional columns are currently converted to multiple columns, named colname_1, colname_2, etc. This may not be ideal for all use cases.
 

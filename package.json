@@ -2,8 +2,10 @@
   "name": "fits-table-viewer",
   "displayName": "FITS Table Viewer",
   "description": "A simple viewer for tabular data in FITS files.",
+  "repository": "https://github.com/tHarvey303/fitstableview",
   "version": "0.1.0",
-  "publisher": "tharvey303",
+  "publisher": "tomharvey",
+  "icon": "gfx/logo.png",
   "engines": {
     "vscode": "^1.80.0"
   },
