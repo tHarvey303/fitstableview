@@ -3,7 +3,7 @@
 FITS Table Viewer for VS Code
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/your-username/your-repo/main/resources/logo.png" alt="FITS Table Viewer Logo" width="128"/>
+<img src="https://raw.githubusercontent.com/tharvey303/fitstableview/main/resources/logo.png" alt="FITS Table Viewer Logo" width="128"/>
 </p>
 
 A powerful and flexible VS Code extension for viewing tabular data within FITS (Flexible Image Transport System) files. Built for astronomers, astrophysicists, and anyone working with astronomical data, this extension provides an interactive GUI to inspect FITS tables without leaving your editor.
