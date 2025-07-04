@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "outDir": "out",
+    "lib": ["es2020", "dom"],
+    "sourceMap": true,
+    "rootDir": "extension", // <-- IMPORTANT: Set the root of our source code
+    "strict": true
+  },
+  "include": [
+    "extension/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".vscode-test"]
+}

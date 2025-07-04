@@ -1,0 +1,107 @@
+/* General body styling to match VS Code's look and feel */
+body {
+    font-family: var(--vscode-font-family, 'Segoe WPC', 'Segoe UI', sans-serif);
+    color: var(--vscode-editor-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 10px 20px;
+    overflow: hidden; /* Prevent body scrollbars, handle scrolling in containers */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+/* Container for the table to enable scrolling */
+#table-container {
+    flex-grow: 1;
+    overflow: auto; /* This makes the table container scrollable */
+    position: relative;
+    border: 1px solid var(--vscode-editorWidget-border, #454545);
+    border-radius: 4px;
+}
+
+/* Status messages for loading or error states */
+.status-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    flex-direction: column;
+}
+
+.status-container.error p {
+    color: var(--vscode-errorForeground);
+    background-color: var(--vscode-inputValidation-errorBackground);
+    border: 1px solid var(--vscode-inputValidation-errorBorder);
+    padding: 10px;
+    border-radius: 4px;
+}
+
+/* Table styling */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    white-space: nowrap; /* Prevent text wrapping in cells */
+}
+
+th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--vscode-editorWidget-border, #454545);
+    /* For handling very long string data */
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Table header styling */
+thead th {
+    background-color: var(--vscode-sideBar-background, #252526);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10; /* Ensure header stays above scrolling content */
+    cursor: pointer;
+    user-select: none; /* Prevent text selection on headers */
+}
+
+/* Add a visual indicator for sortable columns on hover */
+thead th:hover {
+    background-color: var(--vscode-list-hoverBackground, #2a2d2e);
+}
+
+/* Sorting indicators (up/down arrows) */
+thead th::after {
+    content: ' ';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    margin-left: 8px;
+    opacity: 0.4;
+}
+
+thead th.sortable-asc::after {
+    border-bottom: 5px solid var(--vscode-editor-foreground);
+    opacity: 1;
+}
+
+thead th.sortable-desc::after {
+    border-top: 5px solid var(--vscode-editor-foreground);
+    opacity: 1;
+}
+
+/* Alternating row colors for better readability */
+tbody tr:nth-child(even) {
+    background-color: var(--vscode-editor-background);
+}
+
+tbody tr:nth-child(odd) {
+    background-color: var(--vscode-sideBar-background, #252526);
+}
+
+/* Hover effect for data rows */
+tbody tr:hover {
+    background-color: var(--vscode-list-hoverBackground, #2a2d2e);
+}
