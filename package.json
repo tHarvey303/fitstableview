@@ -3,7 +3,7 @@
   "displayName": "FITS Table Viewer",
   "description": "A simple viewer for tabular data in FITS files.",
   "repository": "https://github.com/tHarvey303/fitstableview",
-  "version": "0.2.0",
+  "version": "2.1.0",
   "publisher": "tomharvey",
   "icon": "resources/logo_small.png",
   "engines": {
