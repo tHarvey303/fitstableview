@@ -55,17 +55,27 @@ export function activate(context: vscode.ExtensionContext) {
                 return;
             }
 
-            const quickPickItems = tableHdus.map(hdu => ({
-                label: `HDU ${hdu.index}: ${hdu.name}`,
-                description: `Type: ${hdu.type}`,
-                hduIndex: hdu.index
-            }));
+            let selectedHdu: { hduIndex: number } | undefined;
 
-            const selectedHdu = await vscode.window.showQuickPick(quickPickItems, {
-                placeHolder: 'Select a table HDU to view'
-            });
+            if (tableHdus.length === 1) {
+                // If there's only one table HDU, select it automatically
+                selectedHdu = { hduIndex: tableHdus[0].index };
+            } else {
+                // If there are multiple, prompt the user to choose
+                const quickPickItems = tableHdus.map(hdu => ({
+                    label: `HDU ${hdu.index}: ${hdu.name}`,
+                    description: `Type: ${hdu.type}`,
+                    hduIndex: hdu.index
+                }));
 
-            if (!selectedHdu) { return; }
+                const choice = await vscode.window.showQuickPick(quickPickItems, {
+                    placeHolder: 'Select a table HDU to view'
+                });
+                selectedHdu = choice; // Can be undefined if user cancels
+            }
+
+
+            if (!selectedHdu) { return; } // Exit if no HDU was selected or user cancelled
 
             const panel = createWebviewPanel(context, filePath, selectedHdu.hduIndex);
 
@@ -106,7 +116,6 @@ function createWebviewPanel(context: vscode.ExtensionContext, filePath: string, 
         'fitsTableView', 'FITS: ' + path.basename(filePath) + ` [HDU ${hduIndex}]`, vscode.ViewColumn.One,
         {
             enableScripts: true,
-            // This is the key change: it keeps the webview's content in memory when hidden.
             retainContextWhenHidden: true,
             localResourceRoots: [
                 vscode.Uri.joinPath(context.extensionUri, 'extension', 'webview'),
@@ -115,10 +124,8 @@ function createWebviewPanel(context: vscode.ExtensionContext, filePath: string, 
         }
     );
 
-    // Add the panel to our set of active panels
     activePanels.add(panel);
 
-    // When the panel is closed, remove it from the set
     panel.onDidDispose(() => {
         activePanels.delete(panel);
     });
@@ -137,7 +144,6 @@ function getWebviewContent(context: vscode.ExtensionContext, webview: vscode.Web
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'extension', 'webview', 'styles.css'));
     const tabulatorScriptUri = 'https://unpkg.com/tabulator-tables@5.5.4/dist/js/tabulator.min.js';
     
-    // Read the theme from the user's settings
     const themeFileName = getTheme();
     const tabulatorStyleUri = `https://unpkg.com/tabulator-tables@5.5.4/dist/css/${themeFileName}`;
 
