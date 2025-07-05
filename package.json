@@ -15,7 +15,8 @@
   ],
   "activationEvents": [
     "onCommand:fits-viewer.open",
-    "onCustomEditor:fits-viewer.customEditor"
+    "onCustomEditor:fits-viewer.customEditor",
+    "onCommand:fits-viewer.killBackendProcesses"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -23,6 +24,10 @@
       {
         "command": "fits-viewer.open",
         "title": "FITS Table Viewer: Open Table"
+      },
+      {
+        "command": "fits-viewer.killBackendProcesses",
+        "title": "FITS Table Viewer: Terminate All Backend Processes"
       }
     ],
     "menus": {

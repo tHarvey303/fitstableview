@@ -1,23 +1,20 @@
 /* General body styling to match VS Code's look and feel */
-body {
+body, html {
     font-family: var(--vscode-font-family, 'Segoe WPC', 'Segoe UI', sans-serif);
     color: var(--vscode-editor-foreground);
     background-color: var(--vscode-editor-background);
-    padding: 10px 20px;
-    overflow: hidden; /* Prevent body scrollbars, handle scrolling in containers */
-    display: flex;
-    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    overflow: hidden; /* Prevent body scrollbars */
     height: 100vh;
-    box-sizing: border-box;
 }
 
-/* Container for the table to enable scrolling */
+/* The container where Tabulator will build the table */
 #table-container {
-    flex-grow: 1;
-    overflow: auto; /* This makes the table container scrollable */
-    position: relative;
-    border: 1px solid var(--vscode-editorWidget-border, #454545);
-    border-radius: 4px;
+    height: calc(100% - 25px); /* Adjust height to account for status bar */
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px; /* Create space for the progress bar at the top */
 }
 
 /* Status messages for loading or error states */
@@ -37,71 +34,39 @@ body {
     border-radius: 4px;
 }
 
-/* Table styling */
-table {
+/* Status bar at the bottom of the view */
+#status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
     width: 100%;
-    border-collapse: collapse;
-    white-space: nowrap; /* Prevent text wrapping in cells */
+    padding: 2px 10px;
+    background-color: var(--vscode-statusBar-background);
+    color: var(--vscode-statusBar-foreground);
+    font-size: 12px;
+    z-index: 50;
+    box-sizing: border-box;
+    line-height: 1.5;
 }
 
-th, td {
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--vscode-editorWidget-border, #454545);
-    /* For handling very long string data */
-    max-width: 400px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Table header styling */
-thead th {
-    background-color: var(--vscode-sideBar-background, #252526);
-    font-weight: 600;
-    position: sticky;
+/* Progress Bar Styling */
+#progress-container {
+    position: fixed;
     top: 0;
-    z-index: 10; /* Ensure header stays above scrolling content */
-    cursor: pointer;
-    user-select: none; /* Prevent text selection on headers */
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background-color: var(--vscode-progressBar-background);
+    z-index: 100;
 }
 
-/* Add a visual indicator for sortable columns on hover */
-thead th:hover {
-    background-color: var(--vscode-list-hoverBackground, #2a2d2e);
+#progress-container.hidden {
+    display: none;
 }
 
-/* Sorting indicators (up/down arrows) */
-thead th::after {
-    content: ' ';
-    display: inline-block;
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    margin-left: 8px;
-    opacity: 0.4;
-}
-
-thead th.sortable-asc::after {
-    border-bottom: 5px solid var(--vscode-editor-foreground);
-    opacity: 1;
-}
-
-thead th.sortable-desc::after {
-    border-top: 5px solid var(--vscode-editor-foreground);
-    opacity: 1;
-}
-
-/* Alternating row colors for better readability */
-tbody tr:nth-child(even) {
-    background-color: var(--vscode-editor-background);
-}
-
-tbody tr:nth-child(odd) {
-    background-color: var(--vscode-sideBar-background, #252526);
-}
-
-/* Hover effect for data rows */
-tbody tr:hover {
-    background-color: var(--vscode-list-hoverBackground, #2a2d2e);
+#progress-bar {
+    width: 0%;
+    height: 100%;
+    background-color: var(--vscode-sash-hoverBorder);
+    transition: width 0.1s linear;
 }

@@ -1,8 +1,8 @@
 import sys
 import json
 from pathlib import Path
+import argparse
 
-import pandas as pd
 from astropy.io import fits
 from astropy.table import Table
 
@@ -42,15 +42,9 @@ def get_hdu_info(file_path: str) -> str:
     except Exception as e:
         return json.dumps({"error": f"Failed to read FITS file: {str(e)}"})
 
-def stream_table_data(file_path: str, hdu_index: int, chunk_size: int = 1000):
+def stream_table_data(file_path: str, hdu_index: int, max_rows: int, max_cols: int, chunk_size: int = 100):
     """
-    Reads tabular data from a specific HDU in a FITS file and streams
-    it to standard output in JSON chunks.
-
-    Args:
-        file_path: The full path to the FITS file.
-        hdu_index: The 0-based index of the HDU to read.
-        chunk_size: The number of rows to include in each chunk.
+    Reads and streams tabular data, including progress updates.
     """
     try:
         with fits.open(file_path) as hdul:
@@ -61,78 +55,87 @@ def stream_table_data(file_path: str, hdu_index: int, chunk_size: int = 1000):
             if not isinstance(hdu, (fits.BinTableHDU, fits.TableHDU)):
                 raise TypeError(f"HDU {hdu_index} ('{hdu.name}') is not a table HDU.")
 
-            num_rows = len(hdu.data)
-            if num_rows == 0:
-                # Still send a valid, empty JSON structure so the frontend knows what to do.
-                # Create an empty DataFrame with the correct columns.
-                empty_df = fix_multi_dim_tables(Table(hdu.data)).to_pandas()
-                # Send the schema and an empty data array.
-                print(empty_df.to_json(orient="table", index=False), flush=True)
+            total_rows = len(hdu.data)
+            total_cols = len(hdu.columns.names)
+            
+            rows_to_process = total_rows
+            warning_message = None
+
+            if max_rows > 0 and total_rows > max_rows:
+                rows_to_process = max_rows
+                warning_message = f"Warning: Displaying first {max_rows} of {total_rows} rows."
+
+            column_names = hdu.columns.names
+            if max_cols > 0 and total_cols > max_cols:
+                column_names = hdu.columns.names[:max_cols]
+                col_warning = f"Displaying first {max_cols} of {total_cols} columns."
+                warning_message = f"{warning_message} {col_warning}" if warning_message else f"Warning: {col_warning}"
+
+            if rows_to_process == 0:
+                print(json.dumps({"schema": {"fields": []}, "data": [], "total_rows": 0}), flush=True)
                 return
 
-            # Send the schema as the first chunk
-            schema_df = fix_multi_dim_tables(Table(hdu.data[0:1])).to_pandas()
+            # Send the schema first, including total rows for the progress bar
+            temp_table = Table(hdu.data[0:1])[column_names]
+            schema_df = fix_multi_dim_tables(temp_table).to_pandas()
             schema_json = schema_df.to_json(orient="table", index=False)
             parsed_schema = json.loads(schema_json)
-            # We only want to send the schema part, not the single row of data
-            schema_only_message = {"schema": parsed_schema["schema"], "data": []}
+            schema_only_message = {
+                "schema": parsed_schema["schema"],
+                "data": [],
+                "warning": warning_message,
+                "total_rows": rows_to_process
+            }
             print(json.dumps(schema_only_message), flush=True)
 
-
-            # Now, send the data in chunks
-            for i in range(0, num_rows, chunk_size):
-                end = min(i + chunk_size, num_rows)
+            # Stream the data in chunks with progress updates
+            rows_sent = 0
+            for i in range(0, rows_to_process, chunk_size):
+                end = min(i + chunk_size, rows_to_process)
                 
-                # Convert the FITS table slice to an Astropy Table, then to Pandas
-                astropy_table_chunk = fix_multi_dim_tables(Table(hdu.data[i:end]))
-                df_chunk = astropy_table_chunk.to_pandas()
-
-                # Convert DataFrame to JSON records format (an array of objects)
-                # This is efficient and easy for the frontend to parse.
-                # default_handler=str helps sanitize non-standard data types.
-                json_chunk = df_chunk.to_json(orient="records", default_handler=str)
+                astropy_table_chunk = Table(hdu.data[i:end])[column_names]
+                df_chunk = fix_multi_dim_tables(astropy_table_chunk).to_pandas()
+                json_records = json.loads(df_chunk.to_json(orient="records", default_handler=str))
                 
-                # Print the chunk followed by a newline delimiter and flush stdout
-                print(json_chunk, flush=True)
+                rows_sent += len(json_records)
+
+                # Wrap the data chunk in an object with progress info
+                progress_message = {
+                    "data": json_records,
+                    "progress": rows_sent
+                }
+                
+                print(json.dumps(progress_message), flush=True)
 
     except Exception as e:
-        # Print any errors as a JSON object so the frontend can display them
         error_message = json.dumps({"error": str(e)})
         print(error_message, flush=True)
         sys.exit(1)
 
-
 def main():
     """
-    Main entry point for the script.
-    Parses command-line arguments to determine which function to run.
+    Main entry point for the script, now using argparse.
     """
-    if len(sys.argv) < 3:
-        print(json.dumps({"error": "Insufficient arguments."}), flush=True)
+    parser = argparse.ArgumentParser(description="FITS Table Viewer Backend")
+    parser.add_argument("command", choices=["info", "data"], help="The command to execute.")
+    parser.add_argument("file_path", type=str, help="Path to the FITS file.")
+    parser.add_argument("hdu_index", type=int, nargs='?', help="0-based index of the HDU (for 'data' command).")
+    parser.add_argument("--max-rows", type=int, default=0, help="Max rows to load (0 for all).")
+    parser.add_argument("--max-cols", type=int, default=0, help="Max columns to load (0 for all).")
+    
+    args = parser.parse_args()
+
+    if not Path(args.file_path).exists():
+        print(json.dumps({"error": f"File does not exist at path: {args.file_path}"}), flush=True)
         sys.exit(1)
 
-    command = sys.argv[1]
-    file_path = sys.argv[2]
-
-    if not Path(file_path).exists():
-        print(json.dumps({"error": f"File does not exist at path: {file_path}"}), flush=True)
-        sys.exit(1)
-
-    if command == "info":
-        print(get_hdu_info(file_path))
-    elif command == "data":
-        if len(sys.argv) < 4:
+    if args.command == "info":
+        print(get_hdu_info(args.file_path))
+    elif args.command == "data":
+        if args.hdu_index is None:
             print(json.dumps({"error": "HDU index is required for the 'data' command."}), flush=True)
             sys.exit(1)
-        try:
-            hdu_index = int(sys.argv[3])
-            stream_table_data(file_path, hdu_index)
-        except ValueError:
-            print(json.dumps({"error": "HDU index must be an integer."}), flush=True)
-            sys.exit(1)
-    else:
-        print(json.dumps({"error": f"Unknown command: '{command}'"}), flush=True)
-        sys.exit(1)
+        stream_table_data(args.file_path, args.hdu_index, args.max_rows, args.max_cols)
 
 if __name__ == "__main__":
     main()
