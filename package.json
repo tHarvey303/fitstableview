@@ -14,7 +14,8 @@
     "Data Science"
   ],
   "activationEvents": [
-    "onCommand:fits-viewer.open"
+    "onCommand:fits-viewer.open",
+    "onCustomEditor:fits-viewer.customEditor"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -33,25 +34,95 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "fits-viewer.customEditor",
+        "displayName": "FITS Table Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.{fits,fit,fts}"
+          }
+        ],
+        "priority": "default",
+        "when": "config.fits-viewer.defaultEditor"
+      }
+    ],
     "configuration": {
       "title": "FITS Table Viewer",
       "properties": {
         "fits-viewer.theme": {
           "type": "string",
-          "default": "tabulator.min.css",
+          "default": "tabulator_modern.css",
           "description": "Select the display theme for the Tabulator table.",
           "enum": [
             "tabulator.min.css",
+            "tabulator.css",
             "tabulator_modern.min.css",
+            "tabulator_modern.css",
             "tabulator_midnight.min.css",
-            "tabulator_site.min.css"
+            "tabulator_midnight.css",
+            "tabulator_site.min.css",
+            "tabulator_site.css",
+            "tabulator_bootstrap3.min.css",
+            "tabulator_bootstrap3.css",
+            "tabulator_bootstrap4.min.css",
+            "tabulator_bootstrap4.css",
+            "tabulator_bootstrap5.min.css",
+            "tabulator_bootstrap5.css",
+            "tabulator_bulma.min.css",
+            "tabulator_bulma.css",
+            "tabulator_materialize.css",
+            "tabulator_materialize.min.css",
+            "tabulator_semanticui.min.css",
+            "tabulator_semanticui.css"
           ],
           "enumDescriptions": [
+            "Minimal Default Theme",
             "Default Theme",
+            "Minimal Modern Theme",
             "Modern Theme",
+            "Minimal Midnight (Dark) Theme",
             "Midnight (Dark) Theme",
-            "Site Theme"
+            "Minimal Site Theme",
+            "Site Theme",
+            "Minimal Bootstrap 3 Theme",
+            "Bootstrap 3 Theme",
+            "Minimal Bootstrap 4 Theme",
+            "Bootstrap 4 Theme",
+            "Minimal Bootstrap 5 Theme",
+            "Bootstrap 5 Theme",
+            "Minimal Bulma Theme",
+            "Bulma Theme",
+            "Materialize Theme",
+            "Minimal Materialize Theme",
+            "Minimal Semantic UI Theme",
+            "Semantic UI Theme"
           ]
+        },
+        "fits-viewer.defaultEditor": {
+          "type": "boolean",
+          "default": false,
+          "description": "Set FITS Viewer as the default editor for .fits, .fit, and .fts files. Requires a window reload to take effect."
+        },
+        "fits-viewer.pagination.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable pagination for large tables instead of infinite scrolling."
+        },
+        "fits-viewer.pagination.pageSize": {
+          "type": "number",
+          "default": 100,
+          "description": "The number of rows to display per page when pagination is enabled."
+        },
+        "fits-viewer.maxRows": {
+          "type": "number",
+          "default": 0,
+          "description": "The maximum number of rows to load from the FITS file. Set to 0 to load all rows. This provides a hard limit to prevent performance issues."
+        },
+        "fits-viewer.maxColumns": {
+          "type": "number",
+          "default": 0,
+          "description": "The maximum number of columns to load from the FITS file. Set to 0 to load all columns. This can help with very wide tables."
         }
       }
     }

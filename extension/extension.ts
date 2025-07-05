@@ -16,11 +16,19 @@ export function activate(context: vscode.ExtensionContext) {
                 panel.webview.postMessage({ command: 'update_theme', theme: newTheme });
             }
         }
+        // Prompt user to reload if the default editor setting is changed
+        if (e.affectsConfiguration('fits-viewer.defaultEditor')) {
+            vscode.window.showInformationMessage('FITS Viewer default editor setting changed. Please reload the window for it to take effect.', 'Reload Now').then(selection => {
+                if (selection === 'Reload Now') {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            });
+        }
     }));
 
-    let disposable = vscode.commands.registerCommand('fits-viewer.open', async (uri?: vscode.Uri) => {
+    // Register the on-demand command (for context menu and command palette)
+    context.subscriptions.push(vscode.commands.registerCommand('fits-viewer.open', async (uri?: vscode.Uri) => {
         let filePath: string;
-
         if (uri) {
             filePath = uri.fsPath;
         } else {
@@ -29,91 +37,133 @@ export function activate(context: vscode.ExtensionContext) {
                 openLabel: 'Select FITS File',
                 filters: { 'FITS Files': ['fits', 'fit', 'fts'] }
             });
-
-            if (!fileUris || fileUris.length === 0) {
-                vscode.window.showInformationMessage('No file selected.');
-                return;
-            }
+            if (!fileUris || fileUris.length === 0) { return; }
             filePath = fileUris[0].fsPath;
         }
+        // Create a new panel and populate it
+        const panel = createWebviewPanel(context, filePath, -1); // -1 indicates HDU is not yet chosen
+        populateWebviewForFile(context, filePath, panel);
+    }));
 
-
-        try {
-            const hduInfoJson = await getHduInfo(context, filePath);
-            const parsedData: any = JSON.parse(hduInfoJson);
-
-            if (parsedData && parsedData.error) {
-                vscode.window.showErrorMessage(`Error reading FITS file: ${parsedData.error}`);
-                return;
-            }
-
-            const hduInfo: any[] = parsedData;
-            const tableHdus = hduInfo.filter(hdu => hdu.is_table);
-
-            if (tableHdus.length === 0) {
-                vscode.window.showInformationMessage('No tabular data found in this FITS file.');
-                return;
-            }
-
-            let selectedHdu: { hduIndex: number } | undefined;
-
-            if (tableHdus.length === 1) {
-                // If there's only one table HDU, select it automatically
-                selectedHdu = { hduIndex: tableHdus[0].index };
-            } else {
-                // If there are multiple, prompt the user to choose
-                const quickPickItems = tableHdus.map(hdu => ({
-                    label: `HDU ${hdu.index}: ${hdu.name}`,
-                    description: `Type: ${hdu.type}`,
-                    hduIndex: hdu.index
-                }));
-
-                const choice = await vscode.window.showQuickPick(quickPickItems, {
-                    placeHolder: 'Select a table HDU to view'
-                });
-                selectedHdu = choice; // Can be undefined if user cancels
-            }
-
-
-            if (!selectedHdu) { return; } // Exit if no HDU was selected or user cancelled
-
-            const panel = createWebviewPanel(context, filePath, selectedHdu.hduIndex);
-
-            streamPythonData(
-                context,
-                filePath,
-                selectedHdu.hduIndex,
-                (chunk) => {
-                    try {
-                        const data = JSON.parse(chunk);
-                        if (data.error) {
-                            vscode.window.showErrorMessage(`Error streaming data: ${data.error}`);
-                            panel.webview.postMessage({ command: 'error', message: data.error });
-                        } else {
-                            panel.webview.postMessage({ command: 'stream_data', data: data });
-                        }
-                    } catch (e: any) {
-                        console.error("Failed to parse JSON chunk: ", chunk);
-                        vscode.window.showErrorMessage(`Failed to parse data chunk: ${e.message}`);
-                    }
+    // Register the Custom Editor Provider unconditionally.
+    // The 'when' clause in package.json will control its activation.
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            'fits-viewer.customEditor',
+            new FitsEditorProvider(context),
+            {
+                webviewOptions: {
+                    retainContextWhenHidden: true,
                 },
-                (error) => {
-                    vscode.window.showErrorMessage(`Python script error: ${error.message}`);
-                    panel.webview.postMessage({ command: 'error', message: error.message });
-                }
-            );
-
-        } catch (error: any) {
-            vscode.window.showErrorMessage(`Failed to inspect FITS file: ${error.message}`);
-        }
-    });
-
-    context.subscriptions.push(disposable);
+                supportsMultipleEditorsPerDocument: false,
+            }
+        )
+    );
 }
 
+/**
+ * The core logic that populates a webview panel with FITS data.
+ * This is now shared between the command and the custom editor.
+ */
+async function populateWebviewForFile(context: vscode.ExtensionContext, filePath: string, panel: vscode.WebviewPanel) {
+    try {
+        const hduInfoJson = await getHduInfo(context, filePath);
+        const parsedData: any = JSON.parse(hduInfoJson);
+
+        if (parsedData && parsedData.error) {
+            throw new Error(parsedData.error);
+        }
+
+        const hduInfo: any[] = parsedData;
+        const tableHdus = hduInfo.filter(hdu => hdu.is_table);
+
+        if (tableHdus.length === 0) {
+            vscode.window.showInformationMessage('No tabular data found in this FITS file.');
+            panel.webview.html = getWebviewContent(context, panel.webview, 'error', 'No tabular HDUs found.');
+            return;
+        }
+
+        let selectedHdu: { hduIndex: number } | undefined;
+        if (tableHdus.length === 1) {
+            selectedHdu = { hduIndex: tableHdus[0].index };
+        } else {
+            const quickPickItems = tableHdus.map(hdu => ({
+                label: `HDU ${hdu.index}: ${hdu.name}`,
+                description: `Type: ${hdu.type}`,
+                hduIndex: hdu.index
+            }));
+            const choice = await vscode.window.showQuickPick(quickPickItems, { placeHolder: 'Select a table HDU to view' });
+            selectedHdu = choice;
+        }
+
+        if (!selectedHdu) {
+            panel.webview.html = getWebviewContent(context, panel.webview, 'error', 'No HDU selected.');
+            return;
+        }
+
+        // Update panel title now that we have the HDU index
+        panel.title = `FITS: ${path.basename(filePath)} [HDU ${selectedHdu.hduIndex}]`;
+        panel.webview.html = getWebviewContent(context, panel.webview);
+
+        streamPythonData(context, filePath, selectedHdu.hduIndex,
+            (chunk) => {
+                try {
+                    const data = JSON.parse(chunk);
+                    if (data.error) {
+                        panel.webview.postMessage({ command: 'error', message: data.error });
+                    } else {
+                        panel.webview.postMessage({ command: 'stream_data', data: data });
+                    }
+                } catch (e: any) {
+                    console.error("Failed to parse JSON chunk: ", chunk);
+                }
+            },
+            (error) => {
+                panel.webview.postMessage({ command: 'error', message: error.message });
+            }
+        );
+    } catch (error: any) {
+        vscode.window.showErrorMessage(`Failed to open FITS viewer: ${error.message}`);
+        panel.webview.html = getWebviewContent(context, panel.webview, 'error', error.message);
+    }
+}
+
+/**
+ * Provider for the FITS custom editor.
+ */
+class FitsEditorProvider implements vscode.CustomReadonlyEditorProvider {
+    constructor(private readonly context: vscode.ExtensionContext) { }
+
+    public openCustomDocument(uri: vscode.Uri): vscode.CustomDocument {
+        return { uri, dispose: () => { } };
+    }
+
+    public async resolveCustomEditor(document: vscode.CustomDocument, webviewPanel: vscode.WebviewPanel): Promise<void> {
+        // Setup webview options
+        webviewPanel.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [
+                vscode.Uri.joinPath(this.context.extensionUri, 'extension', 'webview'),
+                vscode.Uri.joinPath(this.context.extensionUri, 'out')
+            ]
+        };
+
+        // Add to active panels for theme updates
+        activePanels.add(webviewPanel);
+        webviewPanel.onDidDispose(() => {
+            activePanels.delete(webviewPanel);
+        });
+
+        // Populate the webview with the FITS data
+        populateWebviewForFile(this.context, document.uri.fsPath, webviewPanel);
+    }
+}
+
+// Helper functions (createWebviewPanel, getWebviewContent, etc.) remain below
+// Note: createWebviewPanel is now only used by the command, not the custom editor.
 function createWebviewPanel(context: vscode.ExtensionContext, filePath: string, hduIndex: number): vscode.WebviewPanel {
     const panel = vscode.window.createWebviewPanel(
-        'fitsTableView', 'FITS: ' + path.basename(filePath) + ` [HDU ${hduIndex}]`, vscode.ViewColumn.One,
+        'fitsTableView', `FITS: ${path.basename(filePath)}`, vscode.ViewColumn.One,
         {
             enableScripts: true,
             retainContextWhenHidden: true,
@@ -123,50 +173,29 @@ function createWebviewPanel(context: vscode.ExtensionContext, filePath: string, 
             ]
         }
     );
-
     activePanels.add(panel);
-
-    panel.onDidDispose(() => {
-        activePanels.delete(panel);
-    });
-
+    panel.onDidDispose(() => { activePanels.delete(panel); });
     panel.iconPath = {
         light: vscode.Uri.joinPath(context.extensionUri, 'resources', 'light-icon.svg'),
         dark: vscode.Uri.joinPath(context.extensionUri, 'resources', 'dark-icon.svg')
     };
-
-    panel.webview.html = getWebviewContent(context, panel.webview);
     return panel;
 }
 
-function getWebviewContent(context: vscode.ExtensionContext, webview: vscode.Webview): string {
+function getWebviewContent(context: vscode.ExtensionContext, webview: vscode.Webview, initialState: 'loading' | 'error' = 'loading', errorMessage: string = ''): string {
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'out', 'webview', 'main.js'));
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'extension', 'webview', 'styles.css'));
     const tabulatorScriptUri = 'https://unpkg.com/tabulator-tables@5.5.4/dist/js/tabulator.min.js';
-    
     const themeFileName = getTheme();
     const tabulatorStyleUri = `https://unpkg.com/tabulator-tables@5.5.4/dist/css/${themeFileName}`;
-
     const nonce = getNonce();
 
-    return `<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://unpkg.com; script-src 'nonce-${nonce}' https://unpkg.com;">
-            
-            <link id="tabulator-theme" href="${tabulatorStyleUri}" rel="stylesheet">
-            <link href="${styleUri}" rel="stylesheet">
-            
-            <title>FITS Table View</title>
-        </head>
-        <body>
-            <div id="table-container"></div><div id="status-bar">Loading...</div>
-            <script nonce="${nonce}" src="${tabulatorScriptUri}"></script>
-            <script nonce="${nonce}" src="${scriptUri}"></script>
-        </body>
-        </html>`;
+    let body = `<div id="table-container"></div><div id="status-bar">Loading...</div>`;
+    if (initialState === 'error') {
+        body = `<div class="status-container error"><h2>Error</h2><p>${errorMessage}</p></div>`;
+    }
+
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline' https://unpkg.com; script-src 'nonce-${nonce}' https://unpkg.com;"><link id="tabulator-theme" href="${tabulatorStyleUri}" rel="stylesheet"><link href="${styleUri}" rel="stylesheet"><title>FITS Table View</title></head><body>${body}<script nonce="${nonce}" src="${tabulatorScriptUri}"></script><script nonce="${nonce}" src="${scriptUri}"></script></body></html>`;
 }
 
 function getTheme(): string {
@@ -179,34 +208,23 @@ function getHduInfo(context: vscode.ExtensionContext, filePath: string): Promise
         const args = [scriptPath, 'info', filePath];
         const pythonPath = vscode.workspace.getConfiguration('python').get<string>('defaultInterpreterPath', 'python');
         const pyProcess = spawn(pythonPath, args);
-
         let stdout = '';
         let stderr = '';
-
         pyProcess.stdout.on('data', (data) => { stdout += data.toString(); });
         pyProcess.stderr.on('data', (data) => { stderr += data.toString(); });
         pyProcess.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(stderr || `Python script failed with code ${code}`));
-            }
+            if (code !== 0) { return reject(new Error(stderr || `Python script failed with code ${code}`)); }
             resolve(stdout);
         });
         pyProcess.on('error', (err) => { reject(err); });
     });
 }
 
-function streamPythonData(
-    context: vscode.ExtensionContext,
-    filePath: string,
-    hduIndex: number,
-    onData: (chunk: string) => void,
-    onError: (error: Error) => void
-) {
+function streamPythonData(context: vscode.ExtensionContext, filePath: string, hduIndex: number, onData: (chunk: string) => void, onError: (error: Error) => void) {
     const scriptPath = path.join(context.extensionPath, 'extension', 'backend', 'main.py');
     const args = [scriptPath, 'data', filePath, hduIndex.toString()];
     const pythonPath = vscode.workspace.getConfiguration('python').get<string>('defaultInterpreterPath', 'python');
     const pyProcess = spawn(pythonPath, args);
-
     let buffer = '';
     pyProcess.stdout.on('data', (data) => {
         buffer += data.toString();
@@ -214,29 +232,16 @@ function streamPythonData(
         while (boundary !== -1) {
             const line = buffer.substring(0, boundary);
             buffer = buffer.substring(boundary + 1);
-            if (line) {
-                onData(line);
-            }
+            if (line) { onData(line); }
             boundary = buffer.indexOf('\n');
         }
     });
-
     let stderr = '';
-    pyProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-    });
-
+    pyProcess.stderr.on('data', (data) => { stderr += data.toString(); });
     pyProcess.on('close', (code) => {
-        if (code !== 0) {
-            console.error(`Python script exited with code ${code}`);
-            console.error('Stderr:', stderr);
-            onError(new Error(stderr || `Python script failed with code ${code}`));
-        }
+        if (code !== 0) { onError(new Error(stderr || `Python script failed with code ${code}`)); }
     });
-
-    pyProcess.on('error', (err) => {
-        onError(err);
-    });
+    pyProcess.on('error', (err) => { onError(err); });
 }
 
 function getNonce(): string {
