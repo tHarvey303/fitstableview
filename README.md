@@ -65,7 +65,7 @@ This extension contributes the following settings to the VS Code Settings UI:
 
 ### Release Notes
 
-0.2.0
+0.3.0
 
 * We now skip asking the user to select an HDU if the file only contains one tabular HDU.
 * We added settings to allow users to select a theme for the table viewer. (Including a dark mode!)
