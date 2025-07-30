@@ -42,7 +42,7 @@ def get_hdu_info(file_path: str) -> str:
     except Exception as e:
         return json.dumps({"error": f"Failed to read FITS file: {str(e)}"})
 
-def stream_table_data(file_path: str, hdu_index: int, max_rows: int, max_cols: int, chunk_size: int = 100):
+def stream_table_data(file_path: str, hdu_index: int, max_rows: int, max_cols: int, chunk_size: int = 500):
     """
     Reads and streams tabular data, including progress updates.
     """
